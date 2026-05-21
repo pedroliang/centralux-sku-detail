@@ -25,7 +25,8 @@ const state = {
   
   // Selected product for upload
   selectedProduct: null,
-  isRegistrationMode: false
+  isRegistrationMode: false,
+  selectedFile: null
 };
 
 // Intersection Observer for Infinite Scroll
@@ -692,6 +693,7 @@ function closeUploadModal() {
 
 function clearDropzone() {
   elements.fileInput.value = '';
+  state.selectedFile = null;
   elements.dropzonePreview.classList.add('hidden');
   elements.previewImg.src = '';
   elements.saveUploadBtn.disabled = true;
@@ -703,6 +705,8 @@ function handleFileSelect(file) {
     showToast('Arquivo inválido. Escolha uma imagem.', 'error');
     return;
   }
+  
+  state.selectedFile = file;
   
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -895,7 +899,7 @@ function setupEventListeners() {
       elements.modalPhotoUploaderContainer.classList.remove('hidden');
       
       // Enable save button if a preview file is already loaded
-      elements.saveUploadBtn.disabled = !elements.fileInput.files.length;
+      elements.saveUploadBtn.disabled = !state.selectedFile;
     } else {
       state.selectedProduct = null;
       elements.modalSkuSearchStatus.textContent = 'SKU não encontrado na planilha.';
@@ -937,7 +941,7 @@ function setupEventListeners() {
   });
   
   elements.saveUploadBtn.addEventListener('click', () => {
-    const file = elements.fileInput.files[0];
+    const file = state.selectedFile;
     if (file && state.selectedProduct) {
       uploadToCloudinary(file, state.selectedProduct.code);
     }
