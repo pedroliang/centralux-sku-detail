@@ -181,6 +181,12 @@
           <div class="sku-title-text" id="modal-sku-desc">Descrição do produto</div>
         </div>
 
+        <!-- Section for managing existing photos -->
+        <div id="modal-existing-photos-section" class="existing-photos-section hidden">
+          <label class="input-label">Fotos Cadastradas</label>
+          <div id="modal-existing-photos-grid" class="existing-photos-grid"></div>
+        </div>
+
         <div class="photo-uploader-container" id="modal-photo-uploader-container">
           <!-- Dropzone -->
           <div id="dropzone" class="dropzone">
@@ -198,6 +204,15 @@
             </div>
           </div>
           
+          <!-- Camera Capture Button (for tablets/phones) -->
+          <div class="camera-btn-wrapper" style="margin: 1rem 0;">
+            <button type="button" id="camera-capture-btn" class="secondary-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.75rem 1rem; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; transition: all var(--transition-fast);">
+              <i data-lucide="camera" style="width: 18px; height: 18px;"></i>
+              <span>Tirar Foto com a Câmera</span>
+            </button>
+            <input type="file" id="camera-input" accept="image/*" capture="environment" style="display: none;">
+          </div>
+          
           <!-- Upload progress bar -->
           <div id="upload-progress-container" class="progress-container hidden">
             <div class="progress-bar-wrapper">
@@ -208,7 +223,7 @@
         </div>
 
         <div class="modal-actions">
-          <button id="cancel-upload-btn" class="secondary-btn">Cancelar</button>
+          <button id="cancel-upload-btn" class="secondary-btn">Fechar</button>
           <button id="save-upload-btn" class="primary-btn" disabled>
             <i data-lucide="save"></i>
             <span>Salvar Foto</span>
@@ -224,11 +239,25 @@
       <button id="close-viewer" class="icon-btn close-viewer-btn">
         <i data-lucide="x"></i>
       </button>
+      
+      <!-- Navigation buttons -->
+      <button id="viewer-prev-btn" class="viewer-nav-btn prev-btn" title="Foto Anterior" onclick="event.stopPropagation(); navigateViewer(-1)">
+        <i data-lucide="chevron-left"></i>
+      </button>
+      
       <div class="viewer-img-container">
         <img id="viewer-img" src="" alt="Visualização em tamanho real">
       </div>
+      
+      <button id="viewer-next-btn" class="viewer-nav-btn next-btn" title="Próxima Foto" onclick="event.stopPropagation(); navigateViewer(1)">
+        <i data-lucide="chevron-right"></i>
+      </button>
+      
       <div class="viewer-caption">
-        <span class="sku-badge" id="viewer-sku-code">CODE</span>
+        <div class="viewer-meta-row" style="display: flex; align-items: center; gap: 0.5rem; justify-content: center; margin-bottom: 0.25rem;">
+          <span class="sku-badge" id="viewer-sku-code">CODE</span>
+          <span class="viewer-counter-badge" id="viewer-counter">1 / 1</span>
+        </div>
         <p id="viewer-sku-desc">Descrição do produto</p>
       </div>
     </div>

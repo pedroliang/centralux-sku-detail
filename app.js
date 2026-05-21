@@ -29,7 +29,11 @@ const state = {
   // Selected product for upload
   selectedProduct: null,
   isRegistrationMode: false,
-  selectedFile: null
+  selectedFile: null,
+  
+  // Zoom view state
+  viewerCode: null,
+  viewerIndex: 0
 };
 
 // Intersection Observer for Infinite Scroll
@@ -93,7 +97,9 @@ const elements = {
   modalSkuSearchInput: document.getElementById('modal-sku-search-input'),
   modalSkuSearchStatus: document.getElementById('modal-sku-search-status'),
   modalSkuDetailHeader: document.getElementById('modal-sku-detail-header'),
-  modalPhotoUploaderContainer: document.getElementById('modal-photo-uploader-container')
+  modalPhotoUploaderContainer: document.getElementById('modal-photo-uploader-container'),
+  cameraCaptureBtn: document.getElementById('camera-capture-btn'),
+  cameraInput: document.getElementById('camera-input')
 };
 
 /* ==========================================================================
@@ -233,9 +239,14 @@ async function loadFirestoreImageMap() {
           const parts = doc.name.split('/');
           const code = parts[parts.length - 1];
           const fields = doc.fields || {};
-          const imageUrl = fields.imageUrl?.stringValue || '';
-          if (imageUrl) {
-            map[code] = imageUrl;
+          let urls = [];
+          if (fields.imageUrls && fields.imageUrls.arrayValue && fields.imageUrls.arrayValue.values) {
+            urls = fields.imageUrls.arrayValue.values.map(v => v.stringValue).filter(Boolean);
+          } else if (fields.imageUrl && fields.imageUrl.stringValue) {
+            urls = [fields.imageUrl.stringValue];
+          }
+          if (urls.length > 0) {
+            map[code] = urls;
           }
         }
       }
@@ -369,24 +380,66 @@ function renderNextPage() {
   
   for (let i = start; i < end; i++) {
     const product = state.filteredList[i];
-    const imageUrl = product.imageUrl || state.imageMap[product.code];
+    const images = state.imageMap[product.code] || [];
     
     const card = document.createElement('div');
     card.className = 'product-card';
     card.dataset.code = product.code;
     
     let imageAreaHtml = '';
-    if (imageUrl) {
+    if (images.length > 0) {
+      const imagesHtml = images.map((url, idx) => `
+        <img src="${getOptimizedImageUrl(url, 400)}" class="product-img ${idx === 0 ? 'active' : ''}" alt="${product.description}" data-index="${idx}" loading="lazy">
+      `).join('');
+      
+      let navButtonsHtml = '';
+      let dotsHtml = '';
+      let counterHtml = '';
+      
+      if (images.length > 1) {
+        navButtonsHtml = `
+          <button class="carousel-nav-btn prev-btn" title="Foto Anterior" onclick="event.stopPropagation(); navigateCarousel('${product.code}', -1)">
+            <i data-lucide="chevron-left"></i>
+          </button>
+          <button class="carousel-nav-btn next-btn" title="Próxima Foto" onclick="event.stopPropagation(); navigateCarousel('${product.code}', 1)">
+            <i data-lucide="chevron-right"></i>
+          </button>
+        `;
+        
+        dotsHtml = `
+          <div class="carousel-dots">
+            ${images.map((_, idx) => `
+              <span class="carousel-dot ${idx === 0 ? 'active' : ''}" data-index="${idx}" onclick="event.stopPropagation(); setCarouselIndex('${product.code}', ${idx})"></span>
+            `).join('')}
+          </div>
+        `;
+        
+        counterHtml = `
+          <div class="carousel-counter">
+            <i data-lucide="layers" class="counter-icon" style="width: 12px; height: 12px; margin-right: 4px;"></i>
+            <span>1 / ${images.length}</span>
+          </div>
+        `;
+      }
+      
       imageAreaHtml = `
         <div class="card-image-area" onclick="openImageViewer('${product.code}')">
-          <img src="${imageUrl}" class="product-img" alt="${product.description}" loading="lazy">
-          <div class="image-overlay-actions">
-            <button class="overlay-action-btn edit-photo-btn" title="Substituir Foto" onclick="event.stopPropagation(); openUploadModal('${product.code}')">
-              <i data-lucide="edit-3"></i>
-            </button>
-            <button class="overlay-action-btn delete-photo-btn" title="Excluir Foto" onclick="event.stopPropagation(); deleteSkuPhoto('${product.code}')">
-              <i data-lucide="trash-2"></i>
-            </button>
+          <div class="carousel-container">
+            <div class="carousel-slides">
+              ${imagesHtml}
+            </div>
+            ${navButtonsHtml}
+            ${counterHtml}
+            ${dotsHtml}
+            
+            <div class="image-overlay-actions">
+              <button class="overlay-action-btn edit-photo-btn" title="Gerenciar Fotos" onclick="event.stopPropagation(); openUploadModal('${product.code}')">
+                <i data-lucide="edit-3"></i>
+              </button>
+              <button class="overlay-action-btn delete-photo-btn" title="Excluir Produto" onclick="event.stopPropagation(); deleteSkuPhoto('${product.code}')">
+                <i data-lucide="trash-2"></i>
+              </button>
+            </div>
           </div>
         </div>
       `;
@@ -433,6 +486,63 @@ function renderNextPage() {
   }
 }
 
+// Navigation of card carousels
+window.navigateCarousel = function(code, direction) {
+  const container = document.querySelector(`.product-card[data-code="${code}"]`);
+  if (!container) return;
+  
+  const images = state.imageMap[code] || [];
+  if (images.length <= 1) return;
+  
+  const activeImg = container.querySelector('.product-img.active');
+  if (!activeImg) return;
+  
+  let currentIndex = parseInt(activeImg.dataset.index, 10);
+  let nextIndex = currentIndex + direction;
+  
+  if (nextIndex < 0) {
+    nextIndex = images.length - 1;
+  } else if (nextIndex >= images.length) {
+    nextIndex = 0;
+  }
+  
+  window.setCarouselIndex(code, nextIndex);
+}
+
+window.setCarouselIndex = function(code, index) {
+  const container = document.querySelector(`.product-card[data-code="${code}"]`);
+  if (!container) return;
+  
+  const images = state.imageMap[code] || [];
+  if (index < 0 || index >= images.length) return;
+  
+  // Update images active class
+  const imgs = container.querySelectorAll('.product-img');
+  imgs.forEach((img, idx) => {
+    if (idx === index) {
+      img.classList.add('active');
+    } else {
+      img.classList.remove('active');
+    }
+  });
+  
+  // Update dots active class
+  const dots = container.querySelectorAll('.carousel-dot');
+  dots.forEach((dot, idx) => {
+    if (idx === index) {
+      dot.classList.add('active');
+    } else {
+      dot.classList.remove('active');
+    }
+  });
+  
+  // Update counter text
+  const counter = container.querySelector('.carousel-counter span');
+  if (counter) {
+    counter.textContent = `${index + 1} / ${images.length}`;
+  }
+}
+
 // Initial skeletons before sync loads
 function renderSkeletons() {
   elements.productsGrid.innerHTML = '';
@@ -474,8 +584,8 @@ function setupScrollObserver() {
    Firestore Actions
    ========================================================================== */
 
-// Save mapping SKU -> Cloudinary image URL
-async function saveSkuImage(code, imageUrl) {
+// Save mapping SKU -> Array of Cloudinary image URLs
+async function saveSkuImages(code, imageUrls) {
   const url = `${FIRESTORE_BASE_URL}/${code}`;
   
   try {
@@ -487,7 +597,11 @@ async function saveSkuImage(code, imageUrl) {
       body: JSON.stringify({
         fields: {
           code: { stringValue: code },
-          imageUrl: { stringValue: imageUrl },
+          imageUrls: {
+            arrayValue: {
+              values: imageUrls.map(imgUrl => ({ stringValue: imgUrl }))
+            }
+          },
           uploadedAt: { stringValue: new Date().toISOString() }
         }
       })
@@ -495,14 +609,11 @@ async function saveSkuImage(code, imageUrl) {
     
     if (!response.ok) throw new Error(`Save failed: ${response.status}`);
     
-    // Update local state and re-render
-    state.imageMap[code] = imageUrl;
-    showToast(`Foto salva com sucesso para o SKU ${code}!`, 'success');
-    closeUploadModal();
-    runSearch();
+    // Update local state
+    state.imageMap[code] = imageUrls;
   } catch (error) {
     console.error('Error saving image to Firestore:', error);
-    showToast('Falha ao salvar referência da foto no banco de dados.', 'error');
+    throw error;
   }
 }
 
@@ -603,12 +714,11 @@ async function uploadToCloudinary(file, code) {
   const formData = new FormData();
   formData.append('file', file);
   
-  const publicId = `sku_${code}`;
+  // Use unique timestamp to allow multiple images per SKU
+  const publicId = `sku_${code}_${Date.now()}`;
   
   if (isSigned) {
     const timestamp = Math.round(new Date().getTime() / 1000);
-    // Sort keys: public_id, timestamp
-    // String to sign: public_id=...&timestamp=...<apiSecret>
     const params = {
       public_id: publicId,
       timestamp: timestamp
@@ -651,7 +761,30 @@ async function uploadToCloudinary(file, code) {
         
         // Save the image URL in Firestore
         elements.progressText.textContent = 'Gravando dados de referência...';
-        await saveSkuImage(code, imageUrl);
+        
+        const currentImages = state.imageMap[code] || [];
+        const updatedImages = [...currentImages, imageUrl];
+        
+        await saveSkuImages(code, updatedImages);
+        showToast('Foto salva com sucesso!', 'success');
+        
+        // If it was registration mode, switch to edit mode to allow managing/adding more photos
+        if (state.isRegistrationMode) {
+          state.isRegistrationMode = false;
+          elements.modalSkuSearchContainer.classList.add('hidden');
+          elements.modalSkuDetailHeader.classList.remove('hidden');
+          elements.modalPhotoUploaderContainer.classList.remove('hidden');
+          elements.modalTitle.textContent = 'Gerenciar Fotos Reference';
+        }
+        
+        // Rerender gallery in modal
+        renderModalExistingPhotos(code);
+        
+        // Clear preview area for next upload
+        clearDropzone();
+        
+        // Reload list in background
+        runSearch();
       } catch (err) {
         console.error('Error parsing upload response:', err);
         showToast('Erro ao processar resposta do envio.', 'error');
@@ -754,12 +887,15 @@ function openUploadModal(code = null) {
     elements.modalSkuCode.textContent = product.code;
     elements.modalSkuDesc.textContent = product.description;
     
-    elements.modalTitle.textContent = 'Substituir Foto Reference';
+    elements.modalTitle.textContent = 'Gerenciar Fotos Reference';
     
     // Hide search field, show details and dropzone
     elements.modalSkuSearchContainer.classList.add('hidden');
     elements.modalSkuDetailHeader.classList.remove('hidden');
     elements.modalPhotoUploaderContainer.classList.remove('hidden');
+    
+    // Render existing photos
+    renderModalExistingPhotos(code);
   } else {
     // Registration mode
     state.isRegistrationMode = true;
@@ -770,6 +906,10 @@ function openUploadModal(code = null) {
     elements.modalSkuSearchContainer.classList.remove('hidden');
     elements.modalSkuDetailHeader.classList.add('hidden');
     elements.modalPhotoUploaderContainer.classList.add('hidden');
+    
+    // Hide existing photos grid
+    const section = document.getElementById('modal-existing-photos-section');
+    if (section) section.classList.add('hidden');
   }
   
   elements.uploadModal.classList.add('active');
@@ -783,6 +923,7 @@ function closeUploadModal() {
 
 function clearDropzone() {
   elements.fileInput.value = '';
+  if (elements.cameraInput) elements.cameraInput.value = '';
   state.selectedFile = null;
   elements.dropzonePreview.classList.add('hidden');
   elements.previewImg.src = '';
@@ -807,26 +948,164 @@ function handleFileSelect(file) {
   reader.readAsDataURL(file);
 }
 
+// Render list of existing photos inside upload modal
+function renderModalExistingPhotos(code) {
+  const images = state.imageMap[code] || [];
+  const section = document.getElementById('modal-existing-photos-section');
+  const grid = document.getElementById('modal-existing-photos-grid');
+  
+  if (!section || !grid) return;
+  
+  if (images.length === 0) {
+    section.classList.add('hidden');
+    grid.innerHTML = '';
+    return;
+  }
+  
+  section.classList.remove('hidden');
+  grid.innerHTML = images.map((url, idx) => `
+    <div class="existing-photo-thumb" data-index="${idx}">
+      <img src="${getOptimizedImageUrl(url, 150)}" alt="Miniatura ${idx + 1}" loading="lazy">
+      <button type="button" class="delete-thumb-btn" title="Excluir Foto" onclick="event.stopPropagation(); deleteSpecificPhoto('${code}', ${idx})">
+        <i data-lucide="trash-2"></i>
+      </button>
+    </div>
+  `).join('');
+  
+  // Recreate Lucide icons inside the grid
+  lucide.createIcons();
+}
+
+// Delete a specific photo of an SKU by index
+window.deleteSpecificPhoto = async function(code, index) {
+  const images = state.imageMap[code] || [];
+  if (index < 0 || index >= images.length) return;
+  
+  if (!confirm(`Deseja realmente excluir esta foto do SKU ${code}?`)) return;
+  
+  // Verify authorization password first
+  if (state.settings.editPassword) {
+    const password = prompt("Digite a senha de cadastro para excluir a foto:");
+    if (password !== state.settings.editPassword) {
+      showToast("Senha incorreta. Acesso negado.", "error");
+      return;
+    }
+  }
+  
+  const updatedImages = [...images];
+  updatedImages.splice(index, 1);
+  
+  try {
+    if (updatedImages.length === 0) {
+      // If no images left, delete the SKU document entirely from Firestore
+      const url = `${FIRESTORE_BASE_URL}/${code}`;
+      const response = await fetch(url, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`Delete failed: ${response.status}`);
+      delete state.imageMap[code];
+      showToast(`SKU ${code} removido pois não possui mais fotos.`, 'success');
+      closeUploadModal();
+    } else {
+      // Otherwise update document in Firestore with remaining images
+      await saveSkuImages(code, updatedImages);
+      showToast(`Foto removida com sucesso!`, 'success');
+      renderModalExistingPhotos(code);
+    }
+    
+    // Rerender main list
+    runSearch();
+  } catch (error) {
+    console.error('Error deleting specific photo:', error);
+    showToast('Falha ao excluir foto no banco de dados.', 'error');
+  }
+};
+
 // Image Viewer Modal
 function openImageViewer(code) {
-  const imageUrl = state.imageMap[code];
+  const images = state.imageMap[code] || [];
   const product = state.products.find(p => p.code === code);
-  if (!imageUrl || !product) return;
+  if (images.length === 0 || !product) return;
   
-  elements.viewerImg.src = imageUrl;
-  elements.viewerSkuCode.textContent = code;
-  elements.viewerSkuDesc.textContent = product.description;
+  // Find current carousel index from the product card
+  let activeIndex = 0;
+  const container = document.querySelector(`.product-card[data-code="${code}"]`);
+  if (container) {
+    const activeImg = container.querySelector('.product-img.active');
+    if (activeImg) {
+      activeIndex = parseInt(activeImg.dataset.index, 10) || 0;
+    }
+  }
+  
+  state.viewerCode = code;
+  state.viewerIndex = activeIndex;
+  
+  updateViewerImage();
   elements.viewerModal.classList.add('active');
 }
 
 function closeImageViewer() {
   elements.viewerModal.classList.remove('active');
   elements.viewerImg.src = '';
+  state.viewerCode = null;
+  state.viewerIndex = 0;
 }
+
+function updateViewerImage() {
+  const code = state.viewerCode;
+  const index = state.viewerIndex;
+  const images = state.imageMap[code] || [];
+  const product = state.products.find(p => p.code === code);
+  if (!product || images.length === 0) return;
+  
+  const currentUrl = images[index];
+  // Optimize fullscreen viewer image to w_1200 as requested
+  elements.viewerImg.src = getOptimizedImageUrl(currentUrl, 1200);
+  
+  elements.viewerSkuCode.textContent = code;
+  elements.viewerSkuDesc.textContent = product.description;
+  
+  const prevBtn = document.getElementById('viewer-prev-btn');
+  const nextBtn = document.getElementById('viewer-next-btn');
+  const counter = document.getElementById('viewer-counter');
+  
+  if (images.length > 1) {
+    if (prevBtn) prevBtn.classList.remove('hidden');
+    if (nextBtn) nextBtn.classList.remove('hidden');
+    if (counter) {
+      counter.classList.remove('hidden');
+      counter.textContent = `${index + 1} / ${images.length}`;
+    }
+  } else {
+    if (prevBtn) prevBtn.classList.add('hidden');
+    if (nextBtn) nextBtn.classList.add('hidden');
+    if (counter) counter.classList.add('hidden');
+  }
+}
+
+window.navigateViewer = function(direction) {
+  const code = state.viewerCode;
+  const images = state.imageMap[code] || [];
+  if (images.length <= 1) return;
+  
+  let nextIndex = state.viewerIndex + direction;
+  if (nextIndex < 0) {
+    nextIndex = images.length - 1;
+  } else if (nextIndex >= images.length) {
+    nextIndex = 0;
+  }
+  
+  state.viewerIndex = nextIndex;
+  updateViewerImage();
+};
 
 /* ==========================================================================
    Utilities
    ========================================================================== */
+
+// Get optimized Cloudinary URL for faster loading
+function getOptimizedImageUrl(url, width = 400) {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/image/upload/', `/image/upload/w_${width},c_limit,q_auto,f_auto/`);
+}
 
 // Copy text to clipboard
 function copySkuToClipboard(text) {
@@ -1025,6 +1304,14 @@ function setupEventListeners() {
   // File Dropzone interaction
   elements.dropzone.addEventListener('click', () => elements.fileInput.click());
   elements.fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      handleFileSelect(e.target.files[0]);
+    }
+  });
+  
+  // Camera capture button interaction
+  elements.cameraCaptureBtn.addEventListener('click', () => elements.cameraInput.click());
+  elements.cameraInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
       handleFileSelect(e.target.files[0]);
     }
