@@ -30,6 +30,10 @@
         </div>
       </div>
       <div class="header-actions">
+        <button id="add-product-btn" class="primary-btn" title="Cadastrar Novo Produto">
+          <i data-lucide="plus"></i>
+          <span>Cadastrar Produto</span>
+        </button>
         <button id="sync-btn" class="icon-btn-text" title="Sincronizar Planilha">
           <i data-lucide="rotate-cw" id="sync-icon"></i>
           <span>Sincronizar</span>
@@ -58,7 +62,7 @@
         </div>
         
         <div class="filter-bar">
-          <div class="filter-chips">
+          <div class="filter-chips hidden">
             <button class="filter-chip active" data-filter="all">Todos</button>
             <button class="filter-chip" data-filter="has-photo">Com Foto</button>
             <button class="filter-chip" data-filter="no-photo">Sem Foto</button>
@@ -147,12 +151,19 @@
         </button>
       </div>
       <div class="modal-body">
-        <div class="sku-detail-header">
+        <!-- SKU Input (Shown only when registering new products) -->
+        <div class="input-field" id="modal-sku-search-container">
+          <label for="modal-sku-search-input">Código SKU</label>
+          <input type="text" id="modal-sku-search-input" placeholder="Digite o SKU para buscar na planilha..." autocomplete="off">
+          <span class="field-note" id="modal-sku-search-status" style="margin-top: 4px; display: block; font-weight: 500;"></span>
+        </div>
+
+        <div class="sku-detail-header" id="modal-sku-detail-header">
           <div class="sku-badge" id="modal-sku-code">9999</div>
           <div class="sku-title-text" id="modal-sku-desc">Descrição do produto</div>
         </div>
 
-        <div class="photo-uploader-container">
+        <div class="photo-uploader-container" id="modal-photo-uploader-container">
           <!-- Dropzone -->
           <div id="dropzone" class="dropzone">
             <input type="file" id="file-input" accept="image/*" class="file-input">

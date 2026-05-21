@@ -24,7 +24,8 @@ const state = {
   },
   
   // Selected product for upload
-  selectedProduct: null
+  selectedProduct: null,
+  isRegistrationMode: false
 };
 
 // Intersection Observer for Infinite Scroll
@@ -78,7 +79,14 @@ const elements = {
   
   toast: document.getElementById('toast'),
   toastIcon: document.getElementById('toast-icon'),
-  toastMessage: document.getElementById('toast-message')
+  toastMessage: document.getElementById('toast-message'),
+
+  addProductBtn: document.getElementById('add-product-btn'),
+  modalSkuSearchContainer: document.getElementById('modal-sku-search-container'),
+  modalSkuSearchInput: document.getElementById('modal-sku-search-input'),
+  modalSkuSearchStatus: document.getElementById('modal-sku-search-status'),
+  modalSkuDetailHeader: document.getElementById('modal-sku-detail-header'),
+  modalPhotoUploaderContainer: document.getElementById('modal-photo-uploader-container')
 };
 
 /* ==========================================================================
@@ -281,16 +289,24 @@ function runSearch() {
   const query = state.searchQuery.trim().toLowerCase();
   const queryWords = query.split(/\s+/).filter(Boolean);
   
-  // Filter products based on search term & tab filter
-  state.filteredList = state.products.filter(product => {
-    // 1. Tab Filter (All, Has Photo, No Photo)
-    const hasPhoto = !!state.imageMap[product.code];
-    if (state.activeFilter === 'has-photo' && !hasPhoto) return false;
-    if (state.activeFilter === 'no-photo' && hasPhoto) return false;
-    
+  // Build the list of registered products to display
+  const registeredProducts = [];
+  const registeredCodes = Object.keys(state.imageMap);
+  
+  for (const code of registeredCodes) {
+    const sheetProduct = state.products.find(p => p.code.trim().toLowerCase() === code.trim().toLowerCase());
+    registeredProducts.push({
+      code: code,
+      description: sheetProduct ? sheetProduct.description : 'Descrição não encontrada no Google Sheets',
+      stock: sheetProduct ? sheetProduct.stock : '0',
+      price: sheetProduct ? sheetProduct.price : 'R$ 0,00'
+    });
+  }
+  
+  // Filter registered products based on search query
+  state.filteredList = registeredProducts.filter(product => {
     if (!query) return true;
     
-    // 2. Search query matching
     // Code match (any substring of the code)
     const codeMatch = product.code.toLowerCase().includes(query);
     
@@ -304,12 +320,11 @@ function runSearch() {
   
   // Update stats
   const totalCount = state.filteredList.length;
-  const withPhotoCount = state.products.filter(p => !!state.imageMap[p.code]).length;
   
-  if (query || state.activeFilter !== 'all') {
-    elements.statsCount.textContent = `Encontrados: ${totalCount} de ${state.products.length} (${withPhotoCount} com foto)`;
+  if (query) {
+    elements.statsCount.textContent = `Encontrados: ${totalCount} de ${registeredProducts.length} produtos cadastrados`;
   } else {
-    elements.statsCount.textContent = `Total: ${state.products.length} produtos (${withPhotoCount} com foto)`;
+    elements.statsCount.textContent = `Total: ${registeredProducts.length} produtos cadastrados`;
   }
   
   // Clear grid and render first page
@@ -332,8 +347,8 @@ function renderNextPage() {
       elements.productsGrid.innerHTML = `
         <div class="image-placeholder" style="grid-column: 1 / -1; height: 300px;">
           <i data-lucide="search-code"></i>
-          <span style="font-size: 1rem; color: var(--text-secondary);">Nenhum produto encontrado</span>
-          <span style="font-size: 0.85rem; color: var(--text-muted);">Tente refinar sua pesquisa com outros termos.</span>
+          <span style="font-size: 1rem; color: var(--text-secondary);">Nenhum produto cadastrado</span>
+          <span style="font-size: 0.85rem; color: var(--text-muted);">Clique no botão "Cadastrar Produto" acima para começar a cadastrar.</span>
         </div>
       `;
       lucide.createIcons();
@@ -347,17 +362,11 @@ function renderNextPage() {
   
   for (let i = start; i < end; i++) {
     const product = state.filteredList[i];
-    const imageUrl = state.imageMap[product.code];
+    const imageUrl = product.imageUrl || state.imageMap[product.code];
     
     const card = document.createElement('div');
     card.className = 'product-card';
     card.dataset.code = product.code;
-    
-    // Stock styling
-    const stockVal = parseFloat(product.stock.replace('.', '').replace(',', '.'));
-    const isOutOfStock = isNaN(stockVal) || stockVal <= 0;
-    const stockClass = isOutOfStock ? 'out-stock' : 'in-stock';
-    const stockText = isOutOfStock ? 'Sem Estoque' : `${product.stock} un`;
     
     let imageAreaHtml = '';
     if (imageUrl) {
@@ -395,10 +404,6 @@ function renderNextPage() {
           <i data-lucide="copy"></i>
           <span>${product.code}</span>
         </div>
-        <div class="card-metrics">
-          <div class="metric-stock ${stockClass}">${stockText}</div>
-          <div class="metric-price">${product.price}</div>
-        </div>
       </div>
       ${imageAreaHtml}
       <div class="card-body">
@@ -430,10 +435,6 @@ function renderSkeletons() {
     card.innerHTML = `
       <div class="card-header">
         <div class="skeleton-badge skeleton-anim"></div>
-        <div class="card-metrics" style="align-items: flex-end; gap: 6px;">
-          <div class="skeleton-text-sm skeleton-anim"></div>
-          <div class="skeleton-text-md skeleton-anim"></div>
-        </div>
       </div>
       <div class="card-image-area">
         <div class="skeleton-img skeleton-anim"></div>
@@ -628,28 +629,57 @@ function saveSettings() {
 }
 
 // Upload Modal
-function openUploadModal(code) {
+function openUploadModal(code = null) {
   // Check authorization password first if set
   if (state.settings.editPassword) {
-    const password = prompt("Digite a senha de cadastro para prosseguir com o upload:");
+    const password = prompt("Digite a senha de cadastro para prosseguir:");
     if (password !== state.settings.editPassword) {
       showToast("Senha incorreta. Acesso negado.", "error");
       return;
     }
   }
   
-  const product = state.products.find(p => p.code === code);
-  if (!product) return;
-  
-  state.selectedProduct = product;
-  elements.modalSkuCode.textContent = product.code;
-  elements.modalSkuDesc.textContent = product.description;
-  
-  const hasPhoto = !!state.imageMap[code];
-  elements.modalTitle.textContent = hasPhoto ? 'Substituir Foto Reference' : 'Cadastrar Foto Reference';
-  
-  // Clean dropzone
+  // Clean dropzone and search inputs
   clearDropzone();
+  elements.modalSkuSearchInput.value = '';
+  elements.modalSkuSearchStatus.textContent = '';
+  elements.modalSkuSearchStatus.className = 'field-note';
+  
+  if (code) {
+    // Edit mode (for existing registered SKU)
+    state.isRegistrationMode = false;
+    
+    // Find the product
+    let product = state.products.find(p => p.code.trim().toLowerCase() === code.trim().toLowerCase());
+    if (!product) {
+      // If not in sheets, build a temporary product object
+      product = {
+        code: code,
+        description: 'Descrição não encontrada no Google Sheets'
+      };
+    }
+    
+    state.selectedProduct = product;
+    elements.modalSkuCode.textContent = product.code;
+    elements.modalSkuDesc.textContent = product.description;
+    
+    elements.modalTitle.textContent = 'Substituir Foto Reference';
+    
+    // Hide search field, show details and dropzone
+    elements.modalSkuSearchContainer.classList.add('hidden');
+    elements.modalSkuDetailHeader.classList.remove('hidden');
+    elements.modalPhotoUploaderContainer.classList.remove('hidden');
+  } else {
+    // Registration mode
+    state.isRegistrationMode = true;
+    state.selectedProduct = null;
+    elements.modalTitle.textContent = 'Cadastrar Novo Produto';
+    
+    // Show search field, hide details and dropzone
+    elements.modalSkuSearchContainer.classList.remove('hidden');
+    elements.modalSkuDetailHeader.classList.add('hidden');
+    elements.modalPhotoUploaderContainer.classList.add('hidden');
+  }
   
   elements.uploadModal.classList.add('active');
 }
@@ -657,6 +687,7 @@ function openUploadModal(code) {
 function closeUploadModal() {
   elements.uploadModal.classList.remove('active');
   state.selectedProduct = null;
+  state.isRegistrationMode = false;
 }
 
 function clearDropzone() {
@@ -827,6 +858,52 @@ function setupEventListeners() {
   elements.cancelUploadBtn.addEventListener('click', closeUploadModal);
   elements.uploadModal.addEventListener('click', (e) => {
     if (e.target === elements.uploadModal) closeUploadModal();
+  });
+
+  // Add Product button in Header
+  elements.addProductBtn.addEventListener('click', () => openUploadModal());
+
+  // Modal SKU Search Input handler
+  elements.modalSkuSearchInput.addEventListener('input', () => {
+    const code = elements.modalSkuSearchInput.value.trim();
+    if (!code) {
+      elements.modalSkuSearchStatus.textContent = '';
+      elements.modalSkuSearchStatus.className = 'field-note';
+      elements.modalSkuDetailHeader.classList.add('hidden');
+      elements.modalPhotoUploaderContainer.classList.add('hidden');
+      state.selectedProduct = null;
+      elements.saveUploadBtn.disabled = true;
+      return;
+    }
+    
+    const foundProduct = state.products.find(p => p.code.trim().toLowerCase() === code.toLowerCase());
+    if (foundProduct) {
+      state.selectedProduct = foundProduct;
+      elements.modalSkuCode.textContent = foundProduct.code;
+      elements.modalSkuDesc.textContent = foundProduct.description;
+      
+      const isAlreadyRegistered = !!state.imageMap[foundProduct.code];
+      if (isAlreadyRegistered) {
+        elements.modalSkuSearchStatus.textContent = 'SKU encontrado! (Já possui foto cadastrada, o envio irá substituí-la)';
+        elements.modalSkuSearchStatus.className = 'field-note success';
+      } else {
+        elements.modalSkuSearchStatus.textContent = 'SKU encontrado!';
+        elements.modalSkuSearchStatus.className = 'field-note success';
+      }
+      
+      elements.modalSkuDetailHeader.classList.remove('hidden');
+      elements.modalPhotoUploaderContainer.classList.remove('hidden');
+      
+      // Enable save button if a preview file is already loaded
+      elements.saveUploadBtn.disabled = !elements.fileInput.files.length;
+    } else {
+      state.selectedProduct = null;
+      elements.modalSkuSearchStatus.textContent = 'SKU não encontrado na planilha.';
+      elements.modalSkuSearchStatus.className = 'field-note error';
+      elements.modalSkuDetailHeader.classList.add('hidden');
+      elements.modalPhotoUploaderContainer.classList.add('hidden');
+      elements.saveUploadBtn.disabled = true;
+    }
   });
   
   // File Dropzone interaction
