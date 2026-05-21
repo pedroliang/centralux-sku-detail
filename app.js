@@ -18,10 +18,10 @@ const state = {
   
   // Settings (stored in localStorage)
   settings: {
-    cloudinaryUrl: '',
+    cloudinaryUrl: 'cloudinary://336228551194777:BSnZaaXs7w2MhVCHdFqi236fbW8@di2q3lieh',
     cloudName: 'di2q3lieh',
-    apiKey: '',
-    apiSecret: '',
+    apiKey: '336228551194777',
+    apiSecret: 'BSnZaaXs7w2MhVCHdFqi236fbW8',
     uploadPreset: 'ml_default',
     editPassword: ''
   },
@@ -884,6 +884,16 @@ function loadLocalSettings() {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
+      // Clean up placeholder or empty credentials to allow new defaults to be used
+      if (!parsed.cloudinaryUrl || parsed.cloudinaryUrl.includes('<your_')) {
+        delete parsed.cloudinaryUrl;
+      }
+      if (!parsed.apiKey || parsed.apiKey.includes('<your_')) {
+        delete parsed.apiKey;
+      }
+      if (!parsed.apiSecret || parsed.apiSecret.includes('<your_')) {
+        delete parsed.apiSecret;
+      }
       state.settings = { ...state.settings, ...parsed };
     } catch (e) {
       console.error('Error parsing settings:', e);
