@@ -871,6 +871,7 @@ input, button, textarea {
   box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 550px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   transform: scale(0.95);
@@ -887,6 +888,7 @@ input, button, textarea {
   justify-content: space-between;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .modal-header h2 {
@@ -900,6 +902,7 @@ input, button, textarea {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  overflow-y: auto;
 }
 
 .sku-detail-header {
@@ -1052,6 +1055,7 @@ input, button, textarea {
   gap: 0.75rem;
   border-top: 1px solid var(--border-color);
   padding-top: 1.25rem;
+  flex-shrink: 0;
 }
 
 /* Fullscreen Viewer */
@@ -1537,4 +1541,78 @@ input, button, textarea {
     gap: 0.5rem;
     text-align: center;
   }
+}
+
+/* Crop Feature Styles */
+.dropzone.has-preview {
+  height: 380px;
+}
+
+.crop-toolbar {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  z-index: 15;
+  background-color: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-md);
+  align-items: center;
+  pointer-events: auto;
+}
+
+.crop-tool-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  height: 30px;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+  gap: 0.25rem;
+}
+
+.crop-tool-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.crop-tool-btn.active {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.crop-tool-btn i {
+  width: 14px;
+  height: 14px;
+}
+
+/* Custom styling for Cropper.js controls to integrate with theme */
+.cropper-bg {
+  background-image: none !important;
+  background-color: var(--bg-secondary) !important;
+}
+
+.cropper-view-box {
+  outline: 2px solid var(--accent-color) !important;
+  outline-color: var(--accent-color) !important;
+}
+
+.cropper-line, .cropper-point {
+  background-color: var(--accent-color) !important;
+}
+
+.cropper-modal {
+  opacity: 0.75 !important;
+  background-color: #000 !important;
 }

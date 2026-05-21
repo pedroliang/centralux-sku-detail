@@ -13,6 +13,9 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   
+  <!-- Cropper.js Styling -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+  
   <!-- Custom Styling -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -198,9 +201,25 @@
             </div>
             <div id="dropzone-preview" class="dropzone-preview hidden">
               <img id="preview-img" src="" alt="Preview">
-              <button id="remove-preview-btn" class="remove-preview-btn" title="Remover imagem">
+              <button id="remove-preview-btn" class="remove-preview-btn" title="Remover imagem" style="z-index: 15;">
                 <i data-lucide="trash-2"></i>
               </button>
+              
+              <!-- Crop Toolbar -->
+              <div class="crop-toolbar" id="crop-toolbar">
+                <button type="button" class="crop-tool-btn active" id="crop-aspect-free-btn" title="Proporção Livre">
+                  <span>Livre</span>
+                </button>
+                <button type="button" class="crop-tool-btn" id="crop-aspect-square-btn" title="Proporção Quadrada (1:1)">
+                  <span>1:1</span>
+                </button>
+                <button type="button" class="crop-tool-btn" id="crop-rotate-left-btn" title="Girar 90° à Esquerda">
+                  <i data-lucide="rotate-ccw"></i>
+                </button>
+                <button type="button" class="crop-tool-btn" id="crop-rotate-right-btn" title="Girar 90° à Direita">
+                  <i data-lucide="rotate-cw"></i>
+                </button>
+              </div>
             </div>
           </div>
           
@@ -268,6 +287,9 @@
     <i data-lucide="check-circle" class="toast-icon" id="toast-icon"></i>
     <span id="toast-message">Mensagem de aviso</span>
   </div>
+
+  <!-- Cropper.js Script -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
 
   <!-- Application Script -->
   <script src="app.js"></script>

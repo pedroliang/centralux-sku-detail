@@ -917,6 +917,7 @@ function openUploadModal(code = null) {
 
 function closeUploadModal() {
   elements.uploadModal.classList.remove('active');
+  clearDropzone();
   state.selectedProduct = null;
   state.isRegistrationMode = false;
 }
@@ -925,6 +926,13 @@ function clearDropzone() {
   elements.fileInput.value = '';
   if (elements.cameraInput) elements.cameraInput.value = '';
   state.selectedFile = null;
+  
+  if (state.cropper) {
+    state.cropper.destroy();
+    state.cropper = null;
+  }
+  
+  elements.dropzone.classList.remove('has-preview');
   elements.dropzonePreview.classList.add('hidden');
   elements.previewImg.src = '';
   elements.saveUploadBtn.disabled = true;
@@ -941,9 +949,43 @@ function handleFileSelect(file) {
   
   const reader = new FileReader();
   reader.onload = (e) => {
+    if (state.cropper) {
+      state.cropper.destroy();
+      state.cropper = null;
+    }
+    
     elements.previewImg.src = e.target.result;
+    elements.dropzone.classList.add('has-preview');
     elements.dropzonePreview.classList.remove('hidden');
-    elements.saveUploadBtn.disabled = false;
+    elements.saveUploadBtn.disabled = true;
+    
+    setTimeout(() => {
+      state.cropper = new Cropper(elements.previewImg, {
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 0.9,
+        responsive: true,
+        restore: true,
+        background: false,
+        modal: true,
+        guides: true,
+        center: true,
+        highlight: true,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+        ready() {
+          elements.saveUploadBtn.disabled = false;
+          
+          const freeBtn = document.getElementById('crop-aspect-free-btn');
+          const squareBtn = document.getElementById('crop-aspect-square-btn');
+          if (freeBtn && squareBtn) {
+            freeBtn.classList.add('active');
+            squareBtn.classList.remove('active');
+          }
+        }
+      });
+    }, 150);
   };
   reader.readAsDataURL(file);
 }
@@ -1302,7 +1344,11 @@ function setupEventListeners() {
   });
   
   // File Dropzone interaction
-  elements.dropzone.addEventListener('click', () => elements.fileInput.click());
+  elements.dropzone.addEventListener('click', (e) => {
+    if (!elements.dropzonePreview.classList.contains('hidden')) return;
+    if (e.target === elements.fileInput) return;
+    elements.fileInput.click();
+  });
   elements.fileInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
       handleFileSelect(e.target.files[0]);
@@ -1339,10 +1385,77 @@ function setupEventListeners() {
     clearDropzone();
   });
   
+  // Crop Toolbar Interactions
+  const freeBtn = document.getElementById('crop-aspect-free-btn');
+  const squareBtn = document.getElementById('crop-aspect-square-btn');
+  const rotateLeftBtn = document.getElementById('crop-rotate-left-btn');
+  const rotateRightBtn = document.getElementById('crop-rotate-right-btn');
+  
+  if (freeBtn) {
+    freeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.cropper) {
+        state.cropper.setAspectRatio(NaN);
+        freeBtn.classList.add('active');
+        squareBtn.classList.remove('active');
+      }
+    });
+  }
+  
+  if (squareBtn) {
+    squareBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.cropper) {
+        state.cropper.setAspectRatio(1);
+        squareBtn.classList.add('active');
+        freeBtn.classList.remove('active');
+      }
+    });
+  }
+  
+  if (rotateLeftBtn) {
+    rotateLeftBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.cropper) {
+        state.cropper.rotate(-90);
+      }
+    });
+  }
+  
+  if (rotateRightBtn) {
+    rotateRightBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.cropper) {
+        state.cropper.rotate(90);
+      }
+    });
+  }
+  
   elements.saveUploadBtn.addEventListener('click', () => {
     const file = state.selectedFile;
     if (file && state.selectedProduct) {
-      uploadToCloudinary(file, state.selectedProduct.code);
+      if (state.cropper) {
+        elements.saveUploadBtn.disabled = true;
+        elements.progressContainer.classList.remove('hidden');
+        elements.progressText.textContent = 'Processando imagem recortada...';
+        
+        state.cropper.getCroppedCanvas({
+          maxWidth: 1600,
+          maxHeight: 1600,
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: 'high'
+        }).toBlob((blob) => {
+          if (blob) {
+            uploadToCloudinary(blob, state.selectedProduct.code);
+          } else {
+            showToast('Erro ao recortar imagem.', 'error');
+            elements.saveUploadBtn.disabled = false;
+            elements.progressContainer.classList.add('hidden');
+          }
+        }, 'image/jpeg', 0.85);
+      } else {
+        uploadToCloudinary(file, state.selectedProduct.code);
+      }
     }
   });
   
