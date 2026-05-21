@@ -110,18 +110,36 @@
       <div class="drawer-body">
         <div class="settings-group">
           <h3>Cloudinary</h3>
-          <p class="settings-help">Utilizado para armazenar fotos das caixas master.</p>
+          <p class="settings-help">Configure sua conta do Cloudinary para armazenamento das fotos.</p>
           
+          <div class="input-field">
+            <label for="cloudinary-url">Cloudinary URL (Recomendado)</label>
+            <input type="text" id="cloudinary-url" placeholder="Cole a URL (cloudinary://...) obtida no painel">
+            <span class="field-note">
+              Cole sua string de conexão completa para preencher e configurar o upload assinado automaticamente.
+            </span>
+          </div>
+
           <div class="input-field">
             <label for="cloudinary-cloud">Cloud Name</label>
             <input type="text" id="cloudinary-cloud" value="di2q3lieh" placeholder="Ex: di2q3lieh">
           </div>
           
           <div class="input-field">
-            <label for="cloudinary-preset">Upload Preset (Unsigned)</label>
-            <input type="text" id="cloudinary-preset" placeholder="Ex: ml_default">
+            <label for="cloudinary-key">API Key (Assinado)</label>
+            <input type="text" id="cloudinary-key" placeholder="Ex: 123456789012345">
+          </div>
+
+          <div class="input-field">
+            <label for="cloudinary-secret">API Secret (Assinado)</label>
+            <input type="password" id="cloudinary-secret" placeholder="Digite o API Secret para habilitar envio assinado">
+          </div>
+
+          <div class="input-field" id="preset-field-container">
+            <label for="cloudinary-preset">Upload Preset (Não Assinado / Opcional)</label>
+            <input type="text" id="cloudinary-preset" value="ml_default" placeholder="Ex: ml_default">
             <span class="field-note">
-              Necessário criar um upload preset do tipo <strong>Unsigned</strong> em Configurações -> Upload no painel da Cloudinary.
+              Usado apenas se API Key/Secret não forem fornecidos. Exige um preset "Unsigned" habilitado no Cloudinary.
             </span>
           </div>
         </div>

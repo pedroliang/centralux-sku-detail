@@ -18,7 +18,10 @@ const state = {
   
   // Settings (stored in localStorage)
   settings: {
+    cloudinaryUrl: '',
     cloudName: 'di2q3lieh',
+    apiKey: '',
+    apiSecret: '',
     uploadPreset: 'ml_default',
     editPassword: ''
   },
@@ -41,7 +44,10 @@ const elements = {
   settingsToggle: document.getElementById('settings-toggle'),
   closeSettings: document.getElementById('close-settings'),
   settingsDrawer: document.getElementById('settings-drawer'),
+  cloudinaryUrl: document.getElementById('cloudinary-url'),
   cloudinaryCloud: document.getElementById('cloudinary-cloud'),
+  cloudinaryKey: document.getElementById('cloudinary-key'),
+  cloudinarySecret: document.getElementById('cloudinary-secret'),
   cloudinaryPreset: document.getElementById('cloudinary-preset'),
   editPassword: document.getElementById('edit-password'),
   saveSettingsBtn: document.getElementById('save-settings-btn'),
@@ -535,12 +541,56 @@ async function deleteSkuPhoto(code) {
    Cloudinary Direct Upload
    ========================================================================== */
 
-function uploadToCloudinary(file, code) {
+function parseCloudinaryUrl(urlStr) {
+  if (!urlStr) return null;
+  let cleanUrl = urlStr.trim();
+  
+  // Strip "CLOUDINARY_URL=" prefix if present
+  cleanUrl = cleanUrl.replace(/^(export\s+)?CLOUDINARY_URL\s*=\s*/i, '');
+  
+  // Format: cloudinary://api_key:api_secret@cloud_name
+  const regex = /^cloudinary:\/\/([^:]+):([^@]+)@(.+)$/;
+  const match = cleanUrl.match(regex);
+  if (match) {
+    return {
+      apiKey: match[1],
+      apiSecret: match[2],
+      cloudName: match[3]
+    };
+  }
+  return null;
+}
+
+async function generateSignature(params, apiSecret) {
+  const sortedKeys = Object.keys(params).sort();
+  const pairs = [];
+  for (const key of sortedKeys) {
+    pairs.push(`${key}=${params[key]}`);
+  }
+  const stringToSign = pairs.join('&') + apiSecret;
+  
+  const utf8 = new TextEncoder().encode(stringToSign);
+  const hashBuffer = await crypto.subtle.digest('SHA-1', utf8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
+async function uploadToCloudinary(file, code) {
   const cloudName = state.settings.cloudName;
+  const apiKey = state.settings.apiKey;
+  const apiSecret = state.settings.apiSecret;
   const preset = state.settings.uploadPreset;
   
-  if (!cloudName || !preset) {
-    showToast('Configure o Cloud Name e o Upload Preset nas configurações.', 'error');
+  if (!cloudName) {
+    showToast('Configure o Cloud Name nas configurações.', 'error');
+    elements.saveUploadBtn.disabled = false;
+    return;
+  }
+  
+  const isSigned = !!(apiKey && apiSecret);
+  if (!isSigned && !preset) {
+    showToast('Configure o Upload Preset (para envio não assinado) ou API Key/Secret nas configurações.', 'error');
     elements.saveUploadBtn.disabled = false;
     return;
   }
@@ -552,8 +602,35 @@ function uploadToCloudinary(file, code) {
   const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('upload_preset', preset);
-  formData.append('public_id', `sku_${code}`); // Set friendly ID on Cloudinary
+  
+  const publicId = `sku_${code}`;
+  
+  if (isSigned) {
+    const timestamp = Math.round(new Date().getTime() / 1000);
+    // Sort keys: public_id, timestamp
+    // String to sign: public_id=...&timestamp=...<apiSecret>
+    const params = {
+      public_id: publicId,
+      timestamp: timestamp
+    };
+    
+    try {
+      const signature = await generateSignature(params, apiSecret);
+      formData.append('api_key', apiKey);
+      formData.append('timestamp', timestamp);
+      formData.append('public_id', publicId);
+      formData.append('signature', signature);
+    } catch (err) {
+      console.error('Error generating signature:', err);
+      showToast('Erro ao gerar assinatura de upload.', 'error');
+      resetUploadModalProgress();
+      return;
+    }
+  } else {
+    // Unsigned upload
+    formData.append('upload_preset', preset);
+    formData.append('public_id', publicId);
+  }
   
   const xhr = new XMLHttpRequest();
   xhr.open('POST', url, true);
@@ -582,7 +659,14 @@ function uploadToCloudinary(file, code) {
       }
     } else {
       console.error('Cloudinary error response:', xhr.responseText);
-      showToast('Falha no upload. Verifique as credenciais Cloudinary.', 'error');
+      let errMsg = 'Falha no upload.';
+      try {
+        const errJson = JSON.parse(xhr.responseText);
+        if (errJson.error && errJson.error.message) {
+          errMsg += ` Detalhes: ${errJson.error.message}`;
+        }
+      } catch (e) {}
+      showToast(errMsg, 'error');
       resetUploadModalProgress();
     }
   };
@@ -609,9 +693,12 @@ function resetUploadModalProgress() {
 
 // Settings Drawer
 function openSettings() {
-  elements.cloudinaryCloud.value = state.settings.cloudName;
-  elements.cloudinaryPreset.value = state.settings.uploadPreset;
-  elements.editPassword.value = state.settings.editPassword;
+  elements.cloudinaryUrl.value = state.settings.cloudinaryUrl || '';
+  elements.cloudinaryCloud.value = state.settings.cloudName || '';
+  elements.cloudinaryKey.value = state.settings.apiKey || '';
+  elements.cloudinarySecret.value = state.settings.apiSecret || '';
+  elements.cloudinaryPreset.value = state.settings.uploadPreset || '';
+  elements.editPassword.value = state.settings.editPassword || '';
   elements.settingsDrawer.classList.add('active');
 }
 
@@ -620,7 +707,10 @@ function closeSettingsDrawer() {
 }
 
 function saveSettings() {
+  state.settings.cloudinaryUrl = elements.cloudinaryUrl.value.trim();
   state.settings.cloudName = elements.cloudinaryCloud.value.trim();
+  state.settings.apiKey = elements.cloudinaryKey.value.trim();
+  state.settings.apiSecret = elements.cloudinarySecret.value.trim();
   state.settings.uploadPreset = elements.cloudinaryPreset.value.trim();
   state.settings.editPassword = elements.editPassword.value.trim();
   
@@ -793,7 +883,8 @@ function loadLocalSettings() {
   const saved = localStorage.getItem('centralux_settings');
   if (saved) {
     try {
-      state.settings = JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      state.settings = { ...state.settings, ...parsed };
     } catch (e) {
       console.error('Error parsing settings:', e);
     }
@@ -824,6 +915,17 @@ function setupEventListeners() {
     if (e.target === elements.settingsDrawer) closeSettingsDrawer();
   });
   elements.saveSettingsBtn.addEventListener('click', saveSettings);
+  
+  elements.cloudinaryUrl.addEventListener('input', () => {
+    const urlVal = elements.cloudinaryUrl.value.trim();
+    const parsed = parseCloudinaryUrl(urlVal);
+    if (parsed) {
+      elements.cloudinaryCloud.value = parsed.cloudName;
+      elements.cloudinaryKey.value = parsed.apiKey;
+      elements.cloudinarySecret.value = parsed.apiSecret;
+      showToast('Configurações extraídas da URL com sucesso!', 'success');
+    }
+  });
   
   // Sync button
   elements.syncBtn.addEventListener('click', () => syncDatabase(true));
