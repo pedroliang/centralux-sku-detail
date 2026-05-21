@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CENTRALUX SKU DETAIL</title>
+  
+  <!-- Premium Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Custom Styling -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+  <!-- App Container -->
+  <div class="app-layout">
+    
+    <!-- Top Nav Header -->
+    <header class="main-header">
+      <div class="header-logo">
+        <div class="logo-icon">C</div>
+        <div class="logo-text">
+          <h1>Centralux</h1>
+          <span>SKU DETAIL</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="sync-btn" class="icon-btn-text" title="Sincronizar Planilha">
+          <i data-lucide="rotate-cw" id="sync-icon"></i>
+          <span>Sincronizar</span>
+        </button>
+        <button id="theme-toggle" class="icon-btn" title="Alternar Tema">
+          <i data-lucide="sun" class="sun-icon"></i>
+          <i data-lucide="moon" class="moon-icon"></i>
+        </button>
+        <button id="settings-toggle" class="icon-btn" title="Configurações">
+          <i data-lucide="settings"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Search & Filters Panel -->
+      <section class="search-panel">
+        <div class="search-box">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="search-input" placeholder="Pesquisar por código ou palavras da descrição (qualquer ordem)..." autocomplete="off">
+          <button id="clear-search" class="clear-btn" title="Limpar pesquisa">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        
+        <div class="filter-bar">
+          <div class="filter-chips">
+            <button class="filter-chip active" data-filter="all">Todos</button>
+            <button class="filter-chip" data-filter="has-photo">Com Foto</button>
+            <button class="filter-chip" data-filter="no-photo">Sem Foto</button>
+          </div>
+          <div class="search-stats">
+            <span id="stats-count">Carregando produtos...</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Products Grid -->
+      <section class="products-section">
+        <div id="products-grid" class="products-grid">
+          <!-- Skeleton loaders rendered by JS on start -->
+        </div>
+        
+        <!-- Lazy load sentinel -->
+        <div id="sentinel" class="sentinel">
+          <div class="loader-spinner"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer / Sync Status -->
+    <footer class="main-footer">
+      <div class="footer-status">
+        <span class="status-indicator online"></span>
+        <span id="sync-status-text">Carregando banco de dados...</span>
+      </div>
+      <div class="footer-credit">
+        &copy; 2026 CENTRALUX
+      </div>
+    </footer>
+  </div>
+
+  <!-- Settings Slide-over Drawer -->
+  <div id="settings-drawer" class="drawer-overlay">
+    <div class="drawer-content">
+      <div class="drawer-header">
+        <h2>Configurações</h2>
+        <button id="close-settings" class="icon-btn close-btn">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="drawer-body">
+        <div class="settings-group">
+          <h3>Cloudinary</h3>
+          <p class="settings-help">Utilizado para armazenar fotos das caixas master.</p>
+          
+          <div class="input-field">
+            <label for="cloudinary-cloud">Cloud Name</label>
+            <input type="text" id="cloudinary-cloud" value="di2q3lieh" placeholder="Ex: di2q3lieh">
+          </div>
+          
+          <div class="input-field">
+            <label for="cloudinary-preset">Upload Preset (Unsigned)</label>
+            <input type="text" id="cloudinary-preset" placeholder="Ex: ml_default">
+            <span class="field-note">
+              Necessário criar um upload preset do tipo <strong>Unsigned</strong> em Configurações -> Upload no painel da Cloudinary.
+            </span>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3>Controle de Edição</h3>
+          <p class="settings-help">Senha local para liberar novos cadastros e uploads.</p>
+          
+          <div class="input-field">
+            <label for="edit-password">Senha de Cadastro</label>
+            <input type="password" id="edit-password" placeholder="Digite a senha para habilitar upload">
+          </div>
+        </div>
+
+        <button id="save-settings-btn" class="primary-btn">Salvar Configurações</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Photo Upload / Detail Modal -->
+  <div id="upload-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title">Cadastrar Foto Reference</h2>
+        <button id="close-upload" class="icon-btn close-btn">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="sku-detail-header">
+          <div class="sku-badge" id="modal-sku-code">9999</div>
+          <div class="sku-title-text" id="modal-sku-desc">Descrição do produto</div>
+        </div>
+
+        <div class="photo-uploader-container">
+          <!-- Dropzone -->
+          <div id="dropzone" class="dropzone">
+            <input type="file" id="file-input" accept="image/*" class="file-input">
+            <div class="dropzone-prompt">
+              <i data-lucide="upload-cloud" class="upload-icon"></i>
+              <p class="primary-prompt">Arraste a foto ou clique para escolher</p>
+              <p class="secondary-prompt">Formatos suportados: PNG, JPG, WebP</p>
+            </div>
+            <div id="dropzone-preview" class="dropzone-preview hidden">
+              <img id="preview-img" src="" alt="Preview">
+              <button id="remove-preview-btn" class="remove-preview-btn" title="Remover imagem">
+                <i data-lucide="trash-2"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Upload progress bar -->
+          <div id="upload-progress-container" class="progress-container hidden">
+            <div class="progress-bar-wrapper">
+              <div id="upload-progress-bar" class="progress-bar"></div>
+            </div>
+            <span id="upload-progress-text">Enviando imagem (0%)...</span>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="cancel-upload-btn" class="secondary-btn">Cancelar</button>
+          <button id="save-upload-btn" class="primary-btn" disabled>
+            <i data-lucide="save"></i>
+            <span>Salvar Foto</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full-size Image Viewer Modal -->
+  <div id="viewer-modal" class="modal-overlay viewer-overlay">
+    <div class="viewer-content">
+      <button id="close-viewer" class="icon-btn close-viewer-btn">
+        <i data-lucide="x"></i>
+      </button>
+      <div class="viewer-img-container">
+        <img id="viewer-img" src="" alt="Visualização em tamanho real">
+      </div>
+      <div class="viewer-caption">
+        <span class="sku-badge" id="viewer-sku-code">CODE</span>
+        <p id="viewer-sku-desc">Descrição do produto</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="toast hidden">
+    <i data-lucide="check-circle" class="toast-icon" id="toast-icon"></i>
+    <span id="toast-message">Mensagem de aviso</span>
+  </div>
+
+  <!-- Application Script -->
+  <script src="app.js"></script>
+</body>
+</html>
