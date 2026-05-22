@@ -458,12 +458,26 @@ function renderNextPage() {
       `;
     }
     
+    let headerButtonsHtml = '';
+    if (images.length > 1) {
+      headerButtonsHtml = `
+        <div class="header-carousel-indexes">
+          ${images.map((_, idx) => `
+            <button class="header-index-btn ${idx === 0 ? 'active' : ''}" data-index="${idx}" onclick="event.stopPropagation(); setCarouselIndex('${product.code}', ${idx})" title="Ver foto ${idx + 1}">
+              ${idx + 1}
+            </button>
+          `).join('')}
+        </div>
+      `;
+    }
+    
     card.innerHTML = `
       <div class="card-header">
         <div class="sku-badge" onclick="copySkuToClipboard('${product.code}')" title="Clique para copiar SKU">
           <i data-lucide="copy"></i>
           <span>${product.code}</span>
         </div>
+        ${headerButtonsHtml}
       </div>
       ${imageAreaHtml}
       <div class="card-body">
@@ -533,6 +547,16 @@ window.setCarouselIndex = function(code, index) {
       dot.classList.add('active');
     } else {
       dot.classList.remove('active');
+    }
+  });
+
+  // Update header index buttons active class
+  const indexBtns = container.querySelectorAll('.header-index-btn');
+  indexBtns.forEach((btn, idx) => {
+    if (idx === index) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
     }
   });
   
@@ -1319,14 +1343,15 @@ function setupEventListeners() {
       elements.modalSkuCode.textContent = foundProduct.code;
       elements.modalSkuDesc.textContent = foundProduct.description;
       
-      const isAlreadyRegistered = !!state.imageMap[foundProduct.code];
+      const isAlreadyRegistered = !!state.imageMap[foundProduct.code] && state.imageMap[foundProduct.code].length > 0;
       if (isAlreadyRegistered) {
-        elements.modalSkuSearchStatus.textContent = 'SKU encontrado! (Já possui foto cadastrada, o envio irá substituí-la)';
-        elements.modalSkuSearchStatus.className = 'field-note success';
+        elements.modalSkuSearchStatus.innerHTML = '<i data-lucide="alert-triangle" style="width: 16px; height: 16px; flex-shrink: 0;"></i> <span>Aviso: Este SKU já possui fotos cadastradas! Salvar outra foto irá adicioná-la à galeria.</span>';
+        elements.modalSkuSearchStatus.className = 'field-note warning';
       } else {
-        elements.modalSkuSearchStatus.textContent = 'SKU encontrado!';
+        elements.modalSkuSearchStatus.innerHTML = '<i data-lucide="check-circle" style="width: 14px; height: 14px; flex-shrink: 0;"></i> <span>SKU encontrado na planilha!</span>';
         elements.modalSkuSearchStatus.className = 'field-note success';
       }
+      lucide.createIcons();
       
       elements.modalSkuDetailHeader.classList.remove('hidden');
       elements.modalPhotoUploaderContainer.classList.remove('hidden');
@@ -1335,8 +1360,10 @@ function setupEventListeners() {
       elements.saveUploadBtn.disabled = !state.selectedFile;
     } else {
       state.selectedProduct = null;
-      elements.modalSkuSearchStatus.textContent = 'SKU não encontrado na planilha.';
+      elements.modalSkuSearchStatus.innerHTML = '<i data-lucide="x-circle" style="width: 14px; height: 14px; flex-shrink: 0;"></i> <span>SKU não encontrado na planilha.</span>';
       elements.modalSkuSearchStatus.className = 'field-note error';
+      lucide.createIcons();
+      
       elements.modalSkuDetailHeader.classList.add('hidden');
       elements.modalPhotoUploaderContainer.classList.add('hidden');
       elements.saveUploadBtn.disabled = true;
@@ -1434,6 +1461,15 @@ function setupEventListeners() {
   elements.saveUploadBtn.addEventListener('click', () => {
     const file = state.selectedFile;
     if (file && state.selectedProduct) {
+      // Check if registering a SKU that already has photo(s)
+      if (state.isRegistrationMode) {
+        const isAlreadyRegistered = !!state.imageMap[state.selectedProduct.code] && state.imageMap[state.selectedProduct.code].length > 0;
+        if (isAlreadyRegistered) {
+          const confirmAdd = confirm(`O SKU "${state.selectedProduct.code}" já possui fotos cadastradas. Deseja realmente adicionar esta nova foto à galeria existente?`);
+          if (!confirmAdd) return;
+        }
+      }
+
       if (state.cropper) {
         elements.saveUploadBtn.disabled = true;
         elements.progressContainer.classList.remove('hidden');
