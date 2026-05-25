@@ -1679,3 +1679,50 @@ input, button, textarea {
   opacity: 0.75 !important;
   background-color: #000 !important;
 }
+
+/* Blinking/pulsing red effect for missing dimensions */
+@keyframes blink-red-pulse {
+  0% {
+    border-color: var(--border-color);
+    box-shadow: var(--shadow-sm);
+  }
+  50% {
+    border-color: var(--danger-color);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.45);
+  }
+  100% {
+    border-color: var(--border-color);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+.product-card.blink-red {
+  animation: blink-red-pulse 2s infinite ease-in-out;
+}
+
+/* Warning badge inside card header */
+.warning-badge {
+  background-color: var(--danger-bg);
+  border: 1px solid var(--danger-color);
+  color: var(--danger-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: help;
+  transition: all var(--transition-fast);
+  margin-left: 0.35rem;
+}
+
+.warning-badge:hover {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+.warning-badge i {
+  width: 14px;
+  height: 14px;
+}
+

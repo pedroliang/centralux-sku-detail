@@ -3,11 +3,13 @@
    ========================================================================== */
 
 const GOOGLE_SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/1fRqUo8vH4awjCwV12U0fhR2bdBSRGFUVMlU8PozUsoQ/export?format=csv&gid=1556491081';
+const ESTOQUE_1_CSV_URL = 'https://docs.google.com/spreadsheets/d/1fRqUo8vH4awjCwV12U0fhR2bdBSRGFUVMlU8PozUsoQ/export?format=csv&gid=0';
 const FIRESTORE_BASE_URL = 'https://firestore.googleapis.com/v1/projects/centralux2026/databases/(default)/documents/skus';
 
 // Application state
 const state = {
   products: [],       // Raw product list loaded from Google Sheets
+  estoque1Map: {},    // SKU Code -> { x, y, z, peso } loaded from Google Sheets
   imageMap: {},       // SKU Code -> Cloudinary Image URL map loaded from Firestore
   filteredList: [],   // Currently filtered products
   renderedCount: 0,   // Number of cards currently rendered
@@ -168,25 +170,30 @@ function cleanCell(val) {
 // Load data from Google Sheets CSV
 async function loadGoogleSheetsData() {
   try {
-    const res = await fetch(GOOGLE_SHEETS_CSV_URL);
-    if (!res.ok) throw new Error('Falha ao conectar com o Google Sheets.');
-    const csvText = await res.text();
-    const rows = parseCSV(csvText);
+    const [resProducts, resEstoque1] = await Promise.all([
+      fetch(GOOGLE_SHEETS_CSV_URL),
+      fetch(ESTOQUE_1_CSV_URL)
+    ]);
     
-    if (rows.length < 2) throw new Error('Dados da planilha vazios ou inválidos.');
+    if (!resProducts.ok) throw new Error('Falha ao conectar com o Google Sheets (Lista de Produtos).');
+    if (!resEstoque1.ok) throw new Error('Falha ao conectar com o Google Sheets (Aba Estoque 1).');
+    
+    const csvProducts = await resProducts.text();
+    const csvEstoque1 = await resEstoque1.text();
+    
+    const rowsProducts = parseCSV(csvProducts);
+    if (rowsProducts.length < 2) throw new Error('Dados da planilha de produtos vazios ou inválidos.');
     
     // Parse products (Header: Cód, Estoque, Descrição, Preço Venda)
-    // Find column indexes based on header
-    const header = rows[0].map(h => h.toLowerCase());
-    const idxCode = header.findIndex(h => h.includes('cód') || h.includes('cod'));
-    const idxStock = header.findIndex(h => h.includes('est') || h.includes('saldo'));
-    const idxDesc = header.findIndex(h => h.includes('desc'));
-    const idxPrice = header.findIndex(h => h.includes('preço') || h.includes('preco') || h.includes('venda'));
+    const headerProducts = rowsProducts[0].map(h => h.toLowerCase());
+    const idxCode = headerProducts.findIndex(h => h.includes('cód') || h.includes('cod'));
+    const idxStock = headerProducts.findIndex(h => h.includes('est') || h.includes('saldo'));
+    const idxDesc = headerProducts.findIndex(h => h.includes('desc'));
+    const idxPrice = headerProducts.findIndex(h => h.includes('preço') || h.includes('preco') || h.includes('venda'));
     
     const parsedProducts = [];
-    
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
+    for (let i = 1; i < rowsProducts.length; i++) {
+      const row = rowsProducts[i];
       if (!row || row.length === 0) continue;
       
       const code = idxCode !== -1 ? row[idxCode] : row[0];
@@ -194,7 +201,6 @@ async function loadGoogleSheetsData() {
       const stock = idxStock !== -1 ? row[idxStock] : row[1];
       const price = idxPrice !== -1 ? row[idxPrice] : row[3];
       
-      // We skip items without a code or a description
       if (!code || !description) continue;
       
       parsedProducts.push({
@@ -205,16 +211,54 @@ async function loadGoogleSheetsData() {
       });
     }
     
+    // Parse Estoque 1
+    const rowsEstoque1 = parseCSV(csvEstoque1);
+    let headerRowIdx = -1;
+    for (let i = 0; i < Math.min(rowsEstoque1.length, 5); i++) {
+      if (rowsEstoque1[i] && rowsEstoque1[i][0] && rowsEstoque1[i][0].toLowerCase().startsWith('cod')) {
+        headerRowIdx = i;
+        break;
+      }
+    }
+    
+    const estoque1Map = {};
+    if (headerRowIdx !== -1) {
+      const headerEstoque1 = rowsEstoque1[headerRowIdx].map(h => h.toLowerCase());
+      const idxE1Code = headerEstoque1.findIndex(h => h.startsWith('cod'));
+      const idxX = headerEstoque1.findIndex(h => h.includes('x (cm)') || h.includes('x(cm)') || h === 'x');
+      const idxY = headerEstoque1.findIndex(h => h.includes('y (cm)') || h.includes('y(cm)') || h === 'y');
+      const idxZ = headerEstoque1.findIndex(h => h.includes('z (cm)') || h.includes('z(cm)') || h === 'z');
+      const idxPeso = headerEstoque1.findIndex(h => h.includes('peso'));
+      
+      for (let i = headerRowIdx + 1; i < rowsEstoque1.length; i++) {
+        const row = rowsEstoque1[i];
+        if (!row || row.length === 0) continue;
+        const code = idxE1Code !== -1 ? row[idxE1Code] : row[0];
+        if (!code) continue;
+        
+        const x = idxX !== -1 ? row[idxX] : (row[15] || '');
+        const y = idxY !== -1 ? row[idxY] : (row[16] || '');
+        const z = idxZ !== -1 ? row[idxZ] : (row[17] || '');
+        const peso = idxPeso !== -1 ? row[idxPeso] : (row[18] || '');
+        
+        estoque1Map[code.trim().toLowerCase()] = { x, y, z, peso };
+      }
+    }
+    
     state.products = parsedProducts;
+    state.estoque1Map = estoque1Map;
+    
     localStorage.setItem('centralux_cached_products', JSON.stringify(parsedProducts));
+    localStorage.setItem('centralux_cached_estoque1', JSON.stringify(estoque1Map));
     localStorage.setItem('centralux_cached_time', new Date().toISOString());
     return true;
   } catch (error) {
     console.error('Error loading Google Sheets:', error);
-    // Attempt load from localStorage cache
-    const cached = localStorage.getItem('centralux_cached_products');
-    if (cached) {
-      state.products = JSON.parse(cached);
+    const cachedProducts = localStorage.getItem('centralux_cached_products');
+    const cachedEstoque1 = localStorage.getItem('centralux_cached_estoque1');
+    if (cachedProducts) {
+      state.products = JSON.parse(cachedProducts);
+      state.estoque1Map = cachedEstoque1 ? JSON.parse(cachedEstoque1) : {};
       showToast('Usando dados offline da planilha (sem conexão).', 'warning');
       return true;
     }
@@ -382,8 +426,25 @@ function renderNextPage() {
     const product = state.filteredList[i];
     const images = state.imageMap[product.code] || [];
     
+    // Check if columns P, Q, R, S (X, Y, Z, PESO) are missing/not filled in Estoque 1 sheet
+    const codeKey = product.code.trim().toLowerCase();
+    const estoque1Data = state.estoque1Map[codeKey];
+    let isMissingDimensions = false;
+    
+    if (!estoque1Data) {
+      isMissingDimensions = true;
+    } else {
+      const { x, y, z, peso } = estoque1Data;
+      if (!x || !y || !z || !peso) {
+        isMissingDimensions = true;
+      }
+    }
+    
     const card = document.createElement('div');
     card.className = 'product-card';
+    if (isMissingDimensions) {
+      card.classList.add('blink-red');
+    }
     card.dataset.code = product.code;
     
     let imageAreaHtml = '';
@@ -471,12 +532,22 @@ function renderNextPage() {
       `;
     }
     
+    let warningBadgeHtml = '';
+    if (isMissingDimensions) {
+      warningBadgeHtml = `
+        <div class="warning-badge" title="Medidas (X, Y, Z) ou Peso não preenchidos na aba Estoque 1">
+          <i data-lucide="alert-triangle"></i>
+        </div>
+      `;
+    }
+    
     card.innerHTML = `
       <div class="card-header">
         <div class="sku-badge" onclick="copySkuToClipboard('${product.code}')" title="Clique para copiar SKU">
           <i data-lucide="copy"></i>
           <span>${product.code}</span>
         </div>
+        ${warningBadgeHtml}
         ${headerButtonsHtml}
       </div>
       ${imageAreaHtml}
