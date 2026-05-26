@@ -343,6 +343,15 @@ function setLoadingState(isLoading) {
   }
 }
 
+// Helper to check if SKU has missing dimensions/weight in Estoque 1 sheet (glowing state)
+function hasMissingDimensions(code) {
+  const codeKey = code.trim().toLowerCase();
+  const estoque1Data = state.estoque1Map[codeKey];
+  if (!estoque1Data) return true;
+  const { x, y, z, peso } = estoque1Data;
+  return !x || !y || !z || !peso;
+}
+
 /* ==========================================================================
    Search & Filter Logic
    ========================================================================== */
@@ -378,6 +387,15 @@ function runSearch() {
     );
     
     return codeMatch || descMatch;
+  });
+
+  // Sort to place products with missing dimensions (glowing/blinking cards) at the beginning of the list
+  state.filteredList.sort((a, b) => {
+    const aMissing = hasMissingDimensions(a.code);
+    const bMissing = hasMissingDimensions(b.code);
+    if (aMissing && !bMissing) return -1;
+    if (!aMissing && bMissing) return 1;
+    return 0;
   });
   
   // Update stats
@@ -427,18 +445,7 @@ function renderNextPage() {
     const images = state.imageMap[product.code] || [];
     
     // Check if columns P, Q, R, S (X, Y, Z, PESO) are missing/not filled in Estoque 1 sheet
-    const codeKey = product.code.trim().toLowerCase();
-    const estoque1Data = state.estoque1Map[codeKey];
-    let isMissingDimensions = false;
-    
-    if (!estoque1Data) {
-      isMissingDimensions = true;
-    } else {
-      const { x, y, z, peso } = estoque1Data;
-      if (!x || !y || !z || !peso) {
-        isMissingDimensions = true;
-      }
-    }
+    const isMissingDimensions = hasMissingDimensions(product.code);
     
     const card = document.createElement('div');
     card.className = 'product-card';
@@ -1475,6 +1482,28 @@ function setupEventListeners() {
     elements.dropzone.classList.remove('dragover');
     if (e.dataTransfer.files.length > 0) {
       handleFileSelect(e.dataTransfer.files[0]);
+    }
+  });
+
+  // Handle Ctrl+V paste event for images
+  document.addEventListener('paste', (e) => {
+    // Only handle paste if the upload modal is active and uploader container is visible
+    if (!elements.uploadModal.classList.contains('active')) return;
+    if (elements.modalPhotoUploaderContainer.classList.contains('hidden')) return;
+    
+    // If upload progress is showing, do not allow changing file
+    if (!elements.progressContainer.classList.contains('hidden')) return;
+
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (const item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (file) {
+          handleFileSelect(file);
+          e.preventDefault();
+          break;
+        }
+      }
     }
   });
   
